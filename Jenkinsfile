@@ -1,5 +1,5 @@
 pipeline {
-  agent { label 'docker-agent' }
+  agent { label 'replicated-agent' }
 
   parameters {
     string(
@@ -17,34 +17,27 @@ pipeline {
   environment {
     REPLICATED_API_TOKEN = credentials('replicated-api-token')
     REPLICATED_APP       = credentials('replicated-app')
-    REPLICATED_CLI_IMAGE = 'replicated/vendor-cli:latest'
+    GITHUB_BRANCH_NAME   = "${params.RELEASE_BRANCH}"
+    GITHUB_TAG_NAME      = "${params.RELEASE_TAG}"
   }
 
   stages {
     stage('Validate Inputs') {
       steps {
-        echo "Branch: ${params.RELEASE_BRANCH}"
-        echo "Tag:    ${params.RELEASE_TAG}"
-        echo "App ID: ${env.REPLICATED_APP}"
+        echo "Branch: $GITHUB_BRANCH_NAME"
+        echo "Tag:    $GITHUB_TAG_NAME"
+        echo "App ID: $REPLICATED_APP"
       }
     }
 
     stage('Create Release') {
       when {
-        expression { params.RELEASE_TAG?.trim() }
+        expression { env.GITHUB_TAG_NAME?.trim() }
       }
       steps {
-        container('docker') {
+        container('replicated-cli') {
           dir("${env.WORKSPACE}") {
-            sh """
-              docker run --rm \
-                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \
-                -e REPLICATED_APP=${env.REPLICATED_APP} \
-                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \
-                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \
-                ${env.REPLICATED_CLI_IMAGE} \
-                release create --auto -y
-            """
+            sh 'release create --auto -y'
           }
         }
       }
@@ -52,20 +45,12 @@ pipeline {
 
     stage('Release Kubernetes Installer') {
       when {
-        expression { params.RELEASE_TAG?.trim() }
+        expression { env.GITHUB_TAG_NAME?.trim() }
       }
       steps {
-        container('docker') {
+        container('replicated-cli') {
           dir("${env.WORKSPACE}") {
-            sh """
-              docker run --rm \
-                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \
-                -e REPLICATED_APP=${env.REPLICATED_APP} \
-                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \
-                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \
-                ${env.REPLICATED_CLI_IMAGE} \
-                installer create --auto -y
-            """
+            sh 'installer create --auto -y'
           }
         }
       }
@@ -74,12 +59,7 @@ pipeline {
 
   post {
     always {
-      // Clean workspace using the Workspace Cleanup Plugin
-      cleanWs(
-        deleteDirs: true,                    // delete directories as well as files
-        patterns: [[pattern: '**/*', type: 'INCLUDE']],
-        failOnError: false                   // don’t fail the build if cleanup errors occur
-      )
+      cleanWs()
     }
     success {
       echo '✅ Pipeline completed successfully.'
