@@ -1,7 +1,6 @@
 pipeline {
-  agent { label 'docker-agent' } //agent with docker installed and DinD container
+  agent { label 'docker-agent' }
 
-  // Allow overrides (defaults to the Git branch/tag Jenkins provides)
   parameters {
     string(
       name: 'RELEASE_BRANCH',
@@ -11,16 +10,13 @@ pipeline {
     string(
       name: 'RELEASE_TAG',
       defaultValue: "${env.TAG_NAME}",
-      description: 'Git tag for this release (required to trigger release stages)'
+      description: 'Git tag for this release (only triggers release stages when non-empty)'
     )
   }
 
   environment {
-    // Credentials stored securely in Jenkins
     REPLICATED_API_TOKEN = credentials('replicated-api-token')
     REPLICATED_APP       = credentials('replicated-app')
-
-    // Static config
     REPLICATED_CLI_IMAGE = 'replicated/vendor-cli:latest'
   }
 
@@ -39,15 +35,17 @@ pipeline {
       }
       steps {
         container('docker') {
-          sh """
-            docker run --rm \\
-                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \\
-                -e REPLICATED_APP=${env.REPLICATED_APP} \\
-                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \\
-                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \\
-                ${env.REPLICATED_CLI_IMAGE} \\
+          dir("${env.WORKSPACE}") {
+            sh """
+              docker run --rm \
+                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \
+                -e REPLICATED_APP=${env.REPLICATED_APP} \
+                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \
+                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \
+                ${env.REPLICATED_CLI_IMAGE} \
                 release create --auto -y
-          """
+            """
+          }
         }
       }
     }
@@ -58,15 +56,17 @@ pipeline {
       }
       steps {
         container('docker') {
-          sh """
-            docker run --rm \\
-                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \\
-                -e REPLICATED_APP=${env.REPLICATED_APP} \\
-                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \\
-                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \\
-                ${env.REPLICATED_CLI_IMAGE} \\
+          dir("${env.WORKSPACE}") {
+            sh """
+              docker run --rm \
+                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \
+                -e REPLICATED_APP=${env.REPLICATED_APP} \
+                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \
+                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \
+                ${env.REPLICATED_CLI_IMAGE} \
                 installer create --auto -y
-          """
+            """
+          }
         }
       }
     }
@@ -74,7 +74,12 @@ pipeline {
 
   post {
     always {
-      cleanWs()
+      // Clean workspace using the Workspace Cleanup Plugin
+      cleanWs(
+        deleteDirs: true,                    // delete directories as well as files
+        patterns: [[pattern: '**/*', type: 'INCLUDE']],
+        failOnError: false                   // don’t fail the build if cleanup errors occur
+      )
     }
     success {
       echo '✅ Pipeline completed successfully.'
