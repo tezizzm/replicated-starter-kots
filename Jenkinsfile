@@ -1,5 +1,5 @@
 pipeline {
-  agent any
+  agent { label 'docker-agent' } //agent with docker installed and DinD container
 
   // Allow overrides (defaults to the Git branch/tag Jenkins provides)
   parameters {
@@ -38,15 +38,17 @@ pipeline {
         expression { params.RELEASE_TAG?.trim() }
       }
       steps {
-        sh """
-          docker run --rm \\
-            -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \\
-            -e REPLICATED_APP=${env.REPLICATED_APP} \\
-            -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \\
-            -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \\
-            ${env.REPLICATED_CLI_IMAGE} \\
-            release create --auto -y
-        """
+        container('docker') {
+          sh """
+            docker run --rm \\
+                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \\
+                -e REPLICATED_APP=${env.REPLICATED_APP} \\
+                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \\
+                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \\
+                ${env.REPLICATED_CLI_IMAGE} \\
+                release create --auto -y
+          """
+        }
       }
     }
 
@@ -55,15 +57,17 @@ pipeline {
         expression { params.RELEASE_TAG?.trim() }
       }
       steps {
-        sh """
-          docker run --rm \\
-            -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \\
-            -e REPLICATED_APP=${env.REPLICATED_APP} \\
-            -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \\
-            -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \\
-            ${env.REPLICATED_CLI_IMAGE} \\
-            installer create --auto -y
-        """
+        container('docker') {
+          sh """
+            docker run --rm \\
+                -e REPLICATED_API_TOKEN=${env.REPLICATED_API_TOKEN} \\
+                -e REPLICATED_APP=${env.REPLICATED_APP} \\
+                -e GITHUB_BRANCH_NAME=${params.RELEASE_BRANCH} \\
+                -e GITHUB_TAG_NAME=${params.RELEASE_TAG} \\
+                ${env.REPLICATED_CLI_IMAGE} \\
+                installer create --auto -y
+          """
+        }
       }
     }
   }
